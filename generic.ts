@@ -128,6 +128,18 @@ for (const key of Object.keys(assetFile)) {
 				if (typeof name === 'string') {
 					return name;
 				}
+			} else {
+				// TODO: This should be recursive, but for now we only go one level deep
+				for (const subKey of Object.keys(item)) {
+					if (typeof item[subKey] !== 'object') continue;
+					if (item[subKey]?.guid) {
+						const guid = item[subKey].guid;
+						const name = metaGuids[guid];
+						if (typeof name === 'string') {
+							item[subKey] = name;
+						}
+					}
+				}
 			}
 			return item;
 		});
