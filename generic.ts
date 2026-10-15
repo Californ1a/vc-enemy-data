@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { parseArgs } from 'util';
+import { parseArgs } from 'node:util';
 
 function getAssetsPath() {
 	if (!process.env.UNITY_PROJECT_PATH) {
@@ -93,6 +93,7 @@ async function loadMonoBehaviour(mbPath: string, files: string[], name?: string)
 }
 
 function recurseObjectGuids(obj: any, metaGuids: Record<string, string>) {
+	if (!obj) return;
 	for (const key of Object.keys(obj)) {
 		if (typeof obj[key] !== 'object') continue;
 		if (obj[key]?.guid) {
@@ -115,6 +116,8 @@ function recurseObjectGuids(obj: any, metaGuids: Record<string, string>) {
 				}
 				return item;
 			});
+		} else if (obj) { // Ensure not null, `typeof null` is 'object'
+			recurseObjectGuids(obj[key], metaGuids);
 		}
 	}
 }

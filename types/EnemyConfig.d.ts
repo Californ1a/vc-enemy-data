@@ -7,6 +7,7 @@ interface EnemyConfig {
 	Xp:                          number;
 	KnockbackResistance:         number;
 	DisarmResistance:            number;
+	FreezeResistance:            number;
 	AllowInTemplate:             number;
 	Prefab:                      AssetSource;
 	_idleAnimation:              AssetSource;

@@ -1,6 +1,8 @@
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { parseArgs } from 'util';
+import { parseArgs } from 'node:util';
+import INFOBOX from './templates/enemyInfobox.ts';
+import WikiBotInit from './util/bot.ts';
 
 function getAssetsPath() {
 	if (!process.env.UNITY_PROJECT_PATH) {
@@ -123,7 +125,12 @@ async function loadMonoBehaviours<T extends AssetMonoBehaviour>(prefix: string, 
 	return assets;
 }
 
-async function syncData(enemyName?: string, csv?: boolean) {
+async function syncData(
+	enemyName?: string,
+	csv?: boolean,
+	wiki?: boolean,
+	release: { date?: string, update?: string } = { date: '', update: '' },
+) {
 	const assetsPath = getAssetsPath();
 	const mbPath = path.join(assetsPath, 'MonoBehaviour');
 	const enemyConfigs = await loadMonoBehaviours<EnemyConfigMonoBehaviour>('EnemyConfig', mbPath);
@@ -194,6 +201,7 @@ async function syncData(enemyName?: string, csv?: boolean) {
 			Xp: config.Xp,
 			KnockbackResistance: config.KnockbackResistance,
 			DisarmResistance: config.DisarmResistance,
+			FreezeResistance: config.FreezeResistance,
 			EnemyDifficulty: config.EnemyDifficulty,
 			InstakillResist: config.InstakillResist,
 			IsBoss: config.IsBoss,
@@ -235,37 +243,35 @@ async function syncData(enemyName?: string, csv?: boolean) {
 					.replace('Tiny Bridge_0', 'Teeny Bridge');
 				return `[[Crawlers:${dungeon}|${dungeon}]]`;
 			}).join(', ') : '';
-			const template =
-			`{{Infobox VC Enemy
-			|name = ${found.m_Name.replace(/^EnemyConfig_/, '')}
-			|image = 
-			|release = 21 April 2026
-			|update = Vampire Crawlers, the first-ever Vampire Survivors spin-off, is here!
-			|hp = ${found.BaseHealth}
-			|levelscale = ${found.LevelScaleMultiplier}
-			|xp = ${found.Xp}
-			|knockbackresist = ${found.KnockbackResistance}
-			|disarmresist = ${found.DisarmResistance}
-			|difficulty = ${found.EnemyDifficulty}
-			|instakillresist = ${found.InstakillResist}
-			|boss = ${found.IsBoss === 1 ? 'Yes' : 'No'}
-			|chesttier = ${found.PossibleChestTiers}
-			|maxhit = ${found._maxHit}
-			|maxarmor = ${found._maxArmor}
-			|woundchance = ${found._woundChance}
-			|totalchance = ${found._totalChance}
-			|types = ${(Array.isArray(found.EnemyTypeTags)) ? found.EnemyTypeTags.map(t => t?.replace(/^EnemyType_/, '')).join(', ') : ''}
-			|dungeons = ${dungeonLinks}
-			}}`.replace(/\t/g, '');
+
+			const template = INFOBOX.replace(/%NAME%/g, found.m_Name.replace(/^EnemyConfig_/, ''))
+				.replace(/%RELEASE%/g, release.date || '')
+				.replace(/%UPDATE%/g, release.update || '')
+				.replace(/%HP%/g, found.BaseHealth.toString())
+				.replace(/%LEVELSCALE%/g, found.LevelScaleMultiplier.toString())
+				.replace(/%XP%/g, found.Xp.toString())
+				.replace(/%KNOCKBACKRESIST%/g, found.KnockbackResistance.toString())
+				.replace(/%DISARMRESIST%/g, found.DisarmResistance.toString())
+				.replace(/%FREEZERESIST%/g, found.FreezeResistance.toString())
+				.replace(/%DIFFICULTY%/g, found.EnemyDifficulty.toString())
+				.replace(/%INSTAKILLRESIST%/g, found.InstakillResist.toString())
+				.replace(/%BOSS%/g, found.IsBoss === 1 ? 'Yes' : 'No')
+				.replace(/%CHESTTIER%/g, found.PossibleChestTiers.toString())
+				.replace(/%MAXHIT%/g, found._maxHit.toString())
+				.replace(/%MAXARMOR%/g, found._maxArmor.toString())
+				.replace(/%WOUNDCHANCE%/g, found._woundChance.toString())
+				.replace(/%TOTALCHANCE%/g, found._totalChance.toString())
+				.replace(/%TYPES%/g, (Array.isArray(found.EnemyTypeTags)) ? found.EnemyTypeTags.map(t => t?.replace(/^EnemyType_/, '')).join(', ') : '')
+				.replace(/%DUNGEONS%/g, dungeonLinks);
 	
 			console.log(template);
 		} else {
 			console.log(`Could not find ${enemyName}`);
 		}
 	}
-
+	
+	if (!formattedEnemyList[0]) return;
 	if (csv) {
-		if (!formattedEnemyList[0]) return;
 		const csvHeader = Object.keys(formattedEnemyList[0]).join(',');
 		const csvStr = csvHeader + '\n' + formattedEnemyList.map(row => {
 			const values = [];
@@ -287,6 +293,30 @@ async function syncData(enemyName?: string, csv?: boolean) {
 	
 		console.log(`Wrote ${formattedEnemyList.length} enemies to ${filePath}`);
 	}
+
+	if (wiki) {
+		const { bot, log } = await WikiBotInit();
+		for (const enemy of formattedEnemyList) {
+			const enemyName = enemy.m_Name.replace(/^EnemyConfig_/, '');
+			try {
+				const page = new bot.Page(`Crawlers:${enemyName}`);
+				const exists = await page.exists();
+				if (exists) {
+					log(`Updating enemy page for ${enemyName}`);
+					const content = await page.text();
+					console.log(`Current content for ${enemyName}:\n${content}`);
+					console.log('\n');
+					const templates = await page.templates();
+					console.log(`Current templates for ${enemyName}:\n${JSON.stringify(templates, null, 2)}`);
+				} else {
+					log(`Enemy page not found for ${enemyName}`);
+				}
+			} catch (e) {
+				log(e);
+			}
+			break; // NOTE: Remove this line to enable full wiki upload
+		}
+	}
 }
 
 const { values } = parseArgs({
@@ -298,9 +328,18 @@ const { values } = parseArgs({
 		csv: {
       type: "boolean",
     },
+		release: {
+      type: "string",
+    },
+		update: {
+      type: "string",
+    },
+		wiki: {
+      type: "boolean",
+    },
   },
   strict: true,
 	allowPositionals: true,
 });
 
-syncData(values.enemy, values.csv);
+syncData(values.enemy, values.csv, values.wiki, { date: values.release, update: values.update });
