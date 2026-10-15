@@ -132,8 +132,8 @@ const { values } = parseArgs({
 
 const assetsPath = getAssetsPath();
 const files = await loadProjectFiles(assetsPath, true);
-const metaGuids = await loadMetaGuids(assetsPath, files);
 const assetFile = await loadMonoBehaviour(assetsPath, files, values.file);
+const metaGuids = await loadMetaGuids(assetsPath, files);
 
 if (!assetFile || typeof assetFile !== 'object') {
 	throw new Error('Failed to load MonoBehaviour asset');
