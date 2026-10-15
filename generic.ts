@@ -92,6 +92,33 @@ async function loadMonoBehaviour(mbPath: string, files: string[], name?: string)
 	}
 }
 
+function recurseObjectGuids(obj: any, metaGuids: Record<string, string>) {
+	for (const key of Object.keys(obj)) {
+		if (typeof obj[key] !== 'object') continue;
+		if (obj[key]?.guid) {
+			const guid = obj[key].guid;
+			const name = metaGuids[guid];
+			if (typeof name === 'string') {
+				obj[key] = name;
+			}
+		} else if (Array.isArray(obj[key])) {
+			obj[key] = obj[key].map((item: any) => {
+				if (typeof item !== 'object') return item;
+				if (item?.guid) {
+					const guid = item.guid;
+					const name = metaGuids[guid];
+					if (typeof name === 'string') {
+						return name;
+					}
+				} else {
+					recurseObjectGuids(item, metaGuids);
+				}
+				return item;
+			});
+		}
+	}
+}
+
 const { values } = parseArgs({
 	args: Bun.argv,
 	options: {
@@ -111,39 +138,6 @@ const assetFile = await loadMonoBehaviour(assetsPath, files, values.file);
 if (!assetFile || typeof assetFile !== 'object') {
 	throw new Error('Failed to load MonoBehaviour asset');
 }
-for (const key of Object.keys(assetFile)) {
-	if (typeof assetFile[key] !== 'object') continue;
-	if (assetFile[key]?.guid) {
-		const guid = assetFile[key].guid;
-		const name = metaGuids[guid];
-		if (typeof name === 'string') {
-			assetFile[key] = name;
-		}
-	} else if (Array.isArray(assetFile[key])) {
-		assetFile[key] = assetFile[key].map((item: any) => {
-			if (typeof item !== 'object') return item;
-			if (item?.guid) {
-				const guid = item.guid;
-				const name = metaGuids[guid];
-				if (typeof name === 'string') {
-					return name;
-				}
-			} else {
-				// TODO: This should be recursive, but for now we only go one level deep
-				for (const subKey of Object.keys(item)) {
-					if (typeof item[subKey] !== 'object') continue;
-					if (item[subKey]?.guid) {
-						const guid = item[subKey].guid;
-						const name = metaGuids[guid];
-						if (typeof name === 'string') {
-							item[subKey] = name;
-						}
-					}
-				}
-			}
-			return item;
-		});
-	}
-}
+recurseObjectGuids(assetFile, metaGuids);
 
 console.log(JSON.stringify(assetFile, null, 2));
